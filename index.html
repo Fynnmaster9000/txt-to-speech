@@ -3,15 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Text to Speech (Web)</title>
+<title>Text to Speech with Voice Switch</title>
 <style>
-  body { font-family: Arial, sans-serif; margin: 20px; max-width: 400px; }
-  label { display: block; margin-top: 15px; }
-  select, textarea, button { width: 100%; margin-top: 5px; padding: 8px; }
-  .switch {
-    position: relative; display: inline-block; width: 60px; height: 34px; margin-top: 15px;
+  body { font-family: Arial, sans-serif; margin: 2em; }
+  label.switch {
+    position: relative; display: inline-block; width: 60px; height: 34px;
   }
-  .switch input { opacity: 0; width: 0; height: 0; }
+  label.switch input {opacity: 0; width: 0; height: 0;}
   .slider {
     position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
     background-color: #ccc; transition: .4s; border-radius: 34px;
@@ -20,104 +18,89 @@
     position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px;
     background-color: white; transition: .4s; border-radius: 50%;
   }
-  input:checked + .slider { background-color: #2196F3; }
-  input:checked + .slider:before { transform: translateX(26px); }
+  input:checked + .slider {background-color: #2196F3;}
+  input:checked + .slider:before {transform: translateX(26px);}
+  #playButton { margin-top: 1em; padding: 0.5em 1em; font-size: 1em; }
 </style>
 </head>
 <body>
 
-<h2>Text to Speech</h2>
+<h1>Text to Speech (Male/Female Switch)</h1>
 
-<label>
-  Female Voice:
-  <label class="switch">
-    <input type="checkbox" id="genderToggle" />
-    <span class="slider"></span>
-  </label>
+<textarea id="textInput" rows="5" cols="40" placeholder="Enter text here..."></textarea>
+<br/><br/>
+
+<label class="switch">
+  <input type="checkbox" id="voiceSwitch" />
+  <span class="slider"></span>
 </label>
+<span id="voiceLabel">Female Voice</span>
 
-<label for="voiceSelect">Choose Voice:</label>
-<select id="voiceSelect"></select>
-
-<label for="textInput">Enter Text:</label>
-<textarea id="textInput" rows="5" placeholder="Type text here..."></textarea>
-
+<br/><br/>
 <button id="playButton">Play Speech</button>
 
 <script>
-  const genderToggle = document.getElementById('genderToggle');
-  const voiceSelect = document.getElementById('voiceSelect');
+  let voices = [];
+  let maleVoice = null;
+  let femaleVoice = null;
+
+  function loadVoices() {
+    voices = speechSynthesis.getVoices();
+
+    // Find a female voice (try to match gender by name or voice properties)
+    femaleVoice = voices.find(voice => /female|woman|girl/i.test(voice.name)) || voices[0];
+    // Find a male voice similarly
+    maleVoice = voices.find(voice => /male|man|boy/i.test(voice.name)) || voices[0];
+
+    // If we couldn't find distinct male/female, fallback to first voice
+    if (!femaleVoice) femaleVoice = voices[0];
+    if (!maleVoice) maleVoice = voices[0];
+  }
+
+  // Voices might not be loaded immediately
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = () => {
+      loadVoices();
+    };
+  }
+
+  // Initial load attempt
+  loadVoices();
+
   const textInput = document.getElementById('textInput');
   const playButton = document.getElementById('playButton');
+  const voiceSwitch = document.getElementById('voiceSwitch');
+  const voiceLabel = document.getElementById('voiceLabel');
 
-  let voices = [];
-
-  function populateVoiceList() {
-    voices = speechSynthesis.getVoices();
-    updateVoiceOptions();
-  }
-
-  function updateVoiceOptions() {
-    const femaleChecked = genderToggle.checked;
-
-    // Filter voices by simple heuristic
-    const filteredVoices = voices.filter(voice => {
-      const name = voice.name.toLowerCase();
-      if (femaleChecked) {
-        return name.includes('female') || name.includes('zira') || name.includes('anna') || name.includes('female');
-      } else {
-        return !name.includes('female') && !name.includes('zira') && !name.includes('anna');
-      }
-    });
-
-    voiceSelect.innerHTML = '';
-    filteredVoices.forEach(voice => {
-      const option = document.createElement('option');
-      option.textContent = voice.name + (voice.lang ? ` (${voice.lang})` : '');
-      option.value = voice.name;
-      voiceSelect.appendChild(option);
-    });
-
-    if(filteredVoices.length === 0) {
-      voiceSelect.innerHTML = '<option>No voices found</option>';
-      voiceSelect.disabled = true;
-      playButton.disabled = true;
-    } else {
-      voiceSelect.disabled = false;
-      playButton.disabled = false;
-    }
-  }
-
-  genderToggle.addEventListener('change', updateVoiceOptions);
+  voiceSwitch.addEventListener('change', () => {
+    voiceLabel.textContent = voiceSwitch.checked ? 'Male Voice' : 'Female Voice';
+  });
 
   playButton.addEventListener('click', () => {
-    const text = textInput.value.trim();
+    let text = textInput.value.trim();
     if (!text) {
       alert('Please enter some text.');
       return;
     }
-    const selectedVoiceName = voiceSelect.value;
-    if (!selectedVoiceName || selectedVoiceName === "No voices found") {
-      alert('Please select a valid voice.');
+
+    if (!speechSynthesis) {
+      alert('Sorry, your browser does not support speech synthesis.');
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    const selectedVoice = voices.find(v => v.name === selectedVoiceName);
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-    }
-    utterance.rate = 1; // normal speed
+    let utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1; // normal rate
 
+    // Select voice based on toggle
+    if (voiceSwitch.checked) {
+      utterance.voice = maleVoice;
+    } else {
+      utterance.voice = femaleVoice;
+    }
+
+    speechSynthesis.cancel(); // stop any ongoing speech
     speechSynthesis.speak(utterance);
   });
-
-  // Chrome requires voices to be loaded asynchronously
-  if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = populateVoiceList;
-  }
-
-  populateVoiceList();
 </script>
 
 </body>
