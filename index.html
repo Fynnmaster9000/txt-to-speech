@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Text to Speech (Web)</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; max-width: 400px; }
+  label { display: block; margin-top: 15px; }
+  select, textarea, button { width: 100%; margin-top: 5px; padding: 8px; }
+  .switch {
+    position: relative; display: inline-block; width: 60px; height: 34px; margin-top: 15px;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #ccc; transition: .4s; border-radius: 34px;
+  }
+  .slider:before {
+    position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px;
+    background-color: white; transition: .4s; border-radius: 50%;
+  }
+  input:checked + .slider { background-color: #2196F3; }
+  input:checked + .slider:before { transform: translateX(26px); }
+</style>
+</head>
+<body>
+
+<h2>Text to Speech</h2>
+
+<label>
+  Female Voice:
+  <label class="switch">
+    <input type="checkbox" id="genderToggle" />
+    <span class="slider"></span>
+  </label>
+</label>
+
+<label for="voiceSelect">Choose Voice:</label>
+<select id="voiceSelect"></select>
+
+<label for="textInput">Enter Text:</label>
+<textarea id="textInput" rows="5" placeholder="Type text here..."></textarea>
+
+<button id="playButton">Play Speech</button>
+
+<script>
+  const genderToggle = document.getElementById('genderToggle');
+  const voiceSelect = document.getElementById('voiceSelect');
+  const textInput = document.getElementById('textInput');
+  const playButton = document.getElementById('playButton');
+
+  let voices = [];
+
+  function populateVoiceList() {
+    voices = speechSynthesis.getVoices();
+    updateVoiceOptions();
+  }
+
+  function updateVoiceOptions() {
+    const femaleChecked = genderToggle.checked;
+
+    // Filter voices by simple heuristic
+    const filteredVoices = voices.filter(voice => {
+      const name = voice.name.toLowerCase();
+      if (femaleChecked) {
+        return name.includes('female') || name.includes('zira') || name.includes('anna') || name.includes('female');
+      } else {
+        return !name.includes('female') && !name.includes('zira') && !name.includes('anna');
+      }
+    });
+
+    voiceSelect.innerHTML = '';
+    filteredVoices.forEach(voice => {
+      const option = document.createElement('option');
+      option.textContent = voice.name + (voice.lang ? ` (${voice.lang})` : '');
+      option.value = voice.name;
+      voiceSelect.appendChild(option);
+    });
+
+    if(filteredVoices.length === 0) {
+      voiceSelect.innerHTML = '<option>No voices found</option>';
+      voiceSelect.disabled = true;
+      playButton.disabled = true;
+    } else {
+      voiceSelect.disabled = false;
+      playButton.disabled = false;
+    }
+  }
+
+  genderToggle.addEventListener('change', updateVoiceOptions);
+
+  playButton.addEventListener('click', () => {
+    const text = textInput.value.trim();
+    if (!text) {
+      alert('Please enter some text.');
+      return;
+    }
+    const selectedVoiceName = voiceSelect.value;
+    if (!selectedVoiceName || selectedVoiceName === "No voices found") {
+      alert('Please select a valid voice.');
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const selectedVoice = voices.find(v => v.name === selectedVoiceName);
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+    utterance.rate = 1; // normal speed
+
+    speechSynthesis.speak(utterance);
+  });
+
+  // Chrome requires voices to be loaded asynchronously
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = populateVoiceList;
+  }
+
+  populateVoiceList();
+</script>
+
+</body>
+</html>
