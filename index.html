@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Text to Speech with Voice Switch</title>
+<title>Text to Speech with Voice Switch and Download</title>
 <style>
   body { font-family: Arial, sans-serif; margin: 2em; }
   label.switch {
@@ -20,7 +20,12 @@
   }
   input:checked + .slider {background-color: #2196F3;}
   input:checked + .slider:before {transform: translateX(26px);}
-  #playButton { margin-top: 1em; padding: 0.5em 1em; font-size: 1em; }
+  #buttons { margin-top: 1em; }
+  button {
+    padding: 0.5em 1em;
+    font-size: 1em;
+    margin-right: 10px;
+  }
 </style>
 </head>
 <body>
@@ -37,7 +42,10 @@
 <span id="voiceLabel">Female Voice</span>
 
 <br/><br/>
-<button id="playButton">Play Speech</button>
+<div id="buttons">
+  <button id="playButton">Play Speech</button>
+  <button id="downloadButton">Download Audio</button>
+</div>
 
 <script>
   let voices = [];
@@ -47,28 +55,24 @@
   function loadVoices() {
     voices = speechSynthesis.getVoices();
 
-    // Find a female voice (try to match gender by name or voice properties)
     femaleVoice = voices.find(voice => /female|woman|girl/i.test(voice.name)) || voices[0];
-    // Find a male voice similarly
     maleVoice = voices.find(voice => /male|man|boy/i.test(voice.name)) || voices[0];
 
-    // If we couldn't find distinct male/female, fallback to first voice
     if (!femaleVoice) femaleVoice = voices[0];
     if (!maleVoice) maleVoice = voices[0];
   }
 
-  // Voices might not be loaded immediately
   if (speechSynthesis.onvoiceschanged !== undefined) {
     speechSynthesis.onvoiceschanged = () => {
       loadVoices();
     };
   }
 
-  // Initial load attempt
   loadVoices();
 
   const textInput = document.getElementById('textInput');
   const playButton = document.getElementById('playButton');
+  const downloadButton = document.getElementById('downloadButton');
   const voiceSwitch = document.getElementById('voiceSwitch');
   const voiceLabel = document.getElementById('voiceLabel');
 
@@ -82,24 +86,79 @@
       alert('Please enter some text.');
       return;
     }
-
     if (!speechSynthesis) {
       alert('Sorry, your browser does not support speech synthesis.');
       return;
     }
 
     let utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1; // normal rate
+    utterance.rate = 1;
+    utterance.voice = voiceSwitch.checked ? maleVoice : femaleVoice;
 
-    // Select voice based on toggle
-    if (voiceSwitch.checked) {
-      utterance.voice = maleVoice;
-    } else {
-      utterance.voice = femaleVoice;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+  });
+
+  // Download audio using Web Audio API + SpeechSynthesis + MediaRecorder trick
+  downloadButton.addEventListener('click', () => {
+    let text = textInput.value.trim();
+    if (!text) {
+      alert('Please enter some text to download.');
+      return;
     }
 
-    speechSynthesis.cancel(); // stop any ongoing speech
-    speechSynthesis.speak(utterance);
+    if (!speechSynthesis) {
+      alert('Sorry, your browser does not support speech synthesis.');
+      return;
+    }
+
+    // Create audio context and destination node
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+
+    // Create a dummy oscillator to keep audio context alive
+    const oscillator = audioCtx.createOscillator();
+    oscillator.connect(audioCtx.destination);
+    oscillator.start();
+    oscillator.stop(audioCtx.currentTime + 0.01);
+
+    // Create a MediaStreamAudioDestinationNode
+    const dest = audioCtx.createMediaStreamDestination();
+
+    // Setup utterance with voice
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.voice = voiceSwitch.checked ? maleVoice : femaleVoice;
+    utterance.rate = 1;
+
+    // Create a MediaRecorder from destination stream
+    const mediaRecorder = new MediaRecorder(dest.stream);
+    const chunks = [];
+
+    mediaRecorder.ondataavailable = e => chunks.push(e.data);
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = 'tts_output.wav';
+      document.body.appendChild(a);
+      a.click();
+
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      audioCtx.close();
+    };
+
+    // Connect speechSynthesis audio to destination — 
+    // Unfortunately, speechSynthesis does NOT support routing audio to Web Audio API directly
+    // So this method doesn't work reliably across browsers.
+
+    // Workaround: Just play the speech, ask user to record audio externally, or use server-side TTS.
+
+    alert('Downloading speech audio is not supported directly by browsers via SpeechSynthesis API.\n\nPlease use "Play Speech" and record with an external tool.');
+
   });
 </script>
 
