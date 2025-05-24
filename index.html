@@ -3,164 +3,139 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Text to Speech with Voice Switch and Download</title>
+<title>Text-to-Speech with Progress Bar (Simulated)</title>
 <style>
-  body { font-family: Arial, sans-serif; margin: 2em; }
-  label.switch {
-    position: relative; display: inline-block; width: 60px; height: 34px;
+  #progressBarContainer {
+    width: 100%;
+    background-color: #eee;
+    height: 20px;
+    margin-top: 20px;
   }
-  label.switch input {opacity: 0; width: 0; height: 0;}
-  .slider {
-    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-    background-color: #ccc; transition: .4s; border-radius: 34px;
+  #progressBar {
+    height: 100%;
+    width: 0%;
+    background-color: #4caf50;
+    transition: width 0.1s linear;
   }
-  .slider:before {
-    position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px;
-    background-color: white; transition: .4s; border-radius: 50%;
-  }
-  input:checked + .slider {background-color: #2196F3;}
-  input:checked + .slider:before {transform: translateX(26px);}
-  #buttons { margin-top: 1em; }
-  button {
-    padding: 0.5em 1em;
-    font-size: 1em;
-    margin-right: 10px;
+  #controls {
+    margin-top: 10px;
   }
 </style>
 </head>
 <body>
+  <h2>Text-to-Speech with Progress Bar (Simulated)</h2>
+  <textarea id="textInput" rows="6" cols="60" placeholder="Enter text here..."></textarea><br/>
+  
+  <label for="voiceSelect">Choose Voice:</label>
+  <select id="voiceSelect"></select><br/>
 
-<h1>Text to Speech (Male/Female Switch)</h1>
+  <div id="progressBarContainer">
+    <div id="progressBar"></div>
+  </div>
 
-<textarea id="textInput" rows="5" cols="40" placeholder="Enter text here..."></textarea>
-<br/><br/>
+  <div id="controls">
+    <button id="startBtn">Start Speaking</button>
+    <button id="stopBtn" disabled>Stop</button>
+    <button id="downloadBtn" disabled title="Download not supported in browser TTS">Download Audio</button>
+  </div>
 
-<label class="switch">
-  <input type="checkbox" id="voiceSwitch" />
-  <span class="slider"></span>
-</label>
-<span id="voiceLabel">Female Voice</span>
+  <script>
+    const synth = window.speechSynthesis;
+    const textInput = document.getElementById('textInput');
+    const voiceSelect = document.getElementById('voiceSelect');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const progressBar = document.getElementById('progressBar');
 
-<br/><br/>
-<div id="buttons">
-  <button id="playButton">Play Speech</button>
-  <button id="downloadButton">Download Audio</button>
-</div>
+    let voices = [];
+    let utterance;
+    let progressInterval;
 
-<script>
-  let voices = [];
-  let maleVoice = null;
-  let femaleVoice = null;
-
-  function loadVoices() {
-    voices = speechSynthesis.getVoices();
-
-    femaleVoice = voices.find(voice => /female|woman|girl/i.test(voice.name)) || voices[0];
-    maleVoice = voices.find(voice => /male|man|boy/i.test(voice.name)) || voices[0];
-
-    if (!femaleVoice) femaleVoice = voices[0];
-    if (!maleVoice) maleVoice = voices[0];
-  }
-
-  if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = () => {
-      loadVoices();
-    };
-  }
-
-  loadVoices();
-
-  const textInput = document.getElementById('textInput');
-  const playButton = document.getElementById('playButton');
-  const downloadButton = document.getElementById('downloadButton');
-  const voiceSwitch = document.getElementById('voiceSwitch');
-  const voiceLabel = document.getElementById('voiceLabel');
-
-  voiceSwitch.addEventListener('change', () => {
-    voiceLabel.textContent = voiceSwitch.checked ? 'Male Voice' : 'Female Voice';
-  });
-
-  playButton.addEventListener('click', () => {
-    let text = textInput.value.trim();
-    if (!text) {
-      alert('Please enter some text.');
-      return;
-    }
-    if (!speechSynthesis) {
-      alert('Sorry, your browser does not support speech synthesis.');
-      return;
+    function populateVoices() {
+      voices = synth.getVoices();
+      voiceSelect.innerHTML = '';
+      voices.forEach((voice, i) => {
+        const option = document.createElement('option');
+        option.textContent = `${voice.name} (${voice.lang})`;
+        option.value = i;
+        voiceSelect.appendChild(option);
+      });
     }
 
-    let utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
-    utterance.voice = voiceSwitch.checked ? maleVoice : femaleVoice;
-
-    speechSynthesis.cancel();
-    speechSynthesis.speak(utterance);
-  });
-
-  // Download audio using Web Audio API + SpeechSynthesis + MediaRecorder trick
-  downloadButton.addEventListener('click', () => {
-    let text = textInput.value.trim();
-    if (!text) {
-      alert('Please enter some text to download.');
-      return;
+    populateVoices();
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = populateVoices;
     }
 
-    if (!speechSynthesis) {
-      alert('Sorry, your browser does not support speech synthesis.');
-      return;
-    }
+    startBtn.onclick = () => {
+      if (synth.speaking) {
+        alert('Speech already in progress');
+        return;
+      }
+      if (textInput.value.trim() === '') {
+        alert('Please enter some text');
+        return;
+      }
 
-    // Create audio context and destination node
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    const audioCtx = new AudioContext();
+      utterance = new SpeechSynthesisUtterance(textInput.value);
+      const selectedVoice = voices[voiceSelect.value];
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+      utterance.rate = 1; // normal rate
+      utterance.pitch = 1;
 
-    // Create a dummy oscillator to keep audio context alive
-    const oscillator = audioCtx.createOscillator();
-    oscillator.connect(audioCtx.destination);
-    oscillator.start();
-    oscillator.stop(audioCtx.currentTime + 0.01);
+      synth.speak(utterance);
 
-    // Create a MediaStreamAudioDestinationNode
-    const dest = audioCtx.createMediaStreamDestination();
+      // Simulate progress bar based on text length & speech rate
+      // Average speaking rate ~150 words per minute => 2.5 words per second
+      const words = textInput.value.trim().split(/\s+/).length;
+      const totalTime = (words / 2.5) * 1000; // milliseconds
 
-    // Setup utterance with voice
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.voice = voiceSwitch.checked ? maleVoice : femaleVoice;
-    utterance.rate = 1;
+      let elapsed = 0;
+      progressBar.style.width = '0%';
+      progressInterval = setInterval(() => {
+        elapsed += 100;
+        const progressPercent = Math.min((elapsed / totalTime) * 100, 100);
+        progressBar.style.width = progressPercent + '%';
+        if (progressPercent >= 100) {
+          clearInterval(progressInterval);
+        }
+      }, 100);
 
-    // Create a MediaRecorder from destination stream
-    const mediaRecorder = new MediaRecorder(dest.stream);
-    const chunks = [];
-
-    mediaRecorder.ondataavailable = e => chunks.push(e.data);
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(chunks, { type: 'audio/wav' });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = 'tts_output.wav';
-      document.body.appendChild(a);
-      a.click();
-
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      audioCtx.close();
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      downloadBtn.disabled = true;
     };
 
-    // Connect speechSynthesis audio to destination — 
-    // Unfortunately, speechSynthesis does NOT support routing audio to Web Audio API directly
-    // So this method doesn't work reliably across browsers.
+    stopBtn.onclick = () => {
+      if (synth.speaking) {
+        synth.cancel();
+        clearInterval(progressInterval);
+        progressBar.style.width = '0%';
+      }
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      downloadBtn.disabled = true;
+    };
 
-    // Workaround: Just play the speech, ask user to record audio externally, or use server-side TTS.
+    // Download not supported in Web Speech API:
+    downloadBtn.onclick = () => {
+      alert('Downloading audio is not supported in browser TTS.');
+    };
 
-    alert('Downloading speech audio is not supported directly by browsers via SpeechSynthesis API.\n\nPlease use "Play Speech" and record with an external tool.');
-
-  });
-</script>
-
+    // When speech ends naturally
+    if (!utterance) {
+      utterance = new SpeechSynthesisUtterance();
+    }
+    utterance.onend = () => {
+      clearInterval(progressInterval);
+      progressBar.style.width = '100%';
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      downloadBtn.disabled = true;
+    };
+  </script>
 </body>
 </html>
